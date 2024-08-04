@@ -15,6 +15,15 @@ Todo:
 - [ ] making tests.
 - [ ] make ropchain_generator export rpp_<binname><extension>_processed.txt with multiple addresses so bad bytes are filtered at runtime
 
+How to install:
+```
+# asuming you've cloned the github reposotory to ~/github/ropchain-generator
+python -m venv /tmp/venv && source /tmp/venv/bin/activate && /tmp/venv/bin/pip install pwn numpy
+/tmp/venv/bin/pip install ~/github/ropchain-generator
+# run your favorite github interpreter:
+ipython -c "import ropchain_generator" # shouldn't yield any errors, except `Attempting to work in a virtualenv.`
+```
+
 
 watch.bat
 ```cmd
