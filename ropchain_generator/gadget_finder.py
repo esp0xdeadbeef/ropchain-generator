@@ -5,7 +5,7 @@ import re
 
 class GadgetFinder:
     def __init__(self, gadgets):
-        self.gadgets = gadgets  # Assuming gadgets is a dict provided during class instantiation
+        self.gadgets = gadgets                  # Assuming gadgets is a dict provided during class instantiation
 
     def registers(self):
         re_only_register_arr = [
@@ -18,13 +18,13 @@ class GadgetFinder:
             r"(r|e)?bp|bpl",                    # Matches rbp, ebp, bp, bpl
             r"(r|e)?sp|spl",                    # Matches rsp, esp, sp, spl
             r"[cdefgs]s",                       # Matches segment registers ("cs", "ds", "es", "fs", "gs", "ss")
-            r"cr[0-8]", r"dr[0-7]",               # Matches control and debug registers
-            r"st\([0-7]\)",                      # Matches FPU stack registers
-            r"mm[0-7]",                          # Matches MMX registers
-            r"xmm[0-2]?[0-9]", r"xmm3[01]",       # Matches XMM registers
-            r"ymm[0-2]?[0-9]", r"ymm3[01]",       # Matches YMM registers
-            r"zmm[0-2]?[0-9]", r"zmm3[01]",       # Matches ZMM registers
-            r"r(3[01]|[12][0-9]|[89])[dwb]?"     # Matches R8-R31
+            r"cr[0-8]", r"dr[0-7]",             # Matches control and debug registers
+            r"st\([0-7]\)",                     # Matches FPU stack registers
+            r"mm[0-7]",                         # Matches MMX registers
+            r"xmm[0-2]?[0-9]", r"xmm3[01]",     # Matches XMM registers
+            r"ymm[0-2]?[0-9]", r"ymm3[01]",     # Matches YMM registers
+            r"zmm[0-2]?[0-9]", r"zmm3[01]",     # Matches ZMM registers
+            r"r(3[01]|[12][0-9]|[89])[dwb]?"    # Matches R8-R31
             r"(r|e)?ip"                         # Matches instruction pointer register
         ]
 
