@@ -6,7 +6,7 @@ import json
 
 
 class RopChainGenerator(object):
-    def __init__(self, gadget_file:str, check_gadgets:False, check_gadgets_ks:False, comment_failed_gadgets:False, offset_library = 0):
+    def __init__(self, gadget_file:str, check_gadgets:False, check_gadgets_ks:False, comment_failed_gadgets:False, offset_library = 0, x32 = True):
         self.check_gadgets_ks = check_gadgets_ks
         self.check_gadgets = check_gadgets
         self.comment_failed_gadgets = comment_failed_gadgets
@@ -19,11 +19,16 @@ class RopChainGenerator(object):
         self.gadget_processor_obj = gadget_processor.GadgetProcessor(gadget_file)
         self.gadgets = self.gadget_processor_obj.gadgets
         self.helper_functions = helper_functions.HelperFunctions()
-
+        self.x32 = x32
         if check_gadgets_ks:
-            from keystone import Ks, KS_ARCH_X86, KS_MODE_32
-            self.ks = Ks(KS_ARCH_X86, KS_MODE_32)
-    
+            from keystone import Ks, KS_ARCH_X86
+            if self.x32:
+                from keystone import KS_MODE_32
+                self.ks = Ks(KS_ARCH_X86, KS_MODE_32)
+            if not(self.x32) and check_gadgets_ks:
+                from keystone import KS_MODE_64
+                self.ks = Ks(KS_ARCH_X86, KS_MODE_64)
+
     
     def set_offset_from_esp(self, offset_from_esp):
         self.offset_from_esp = int(offset_from_esp)
@@ -34,7 +39,10 @@ class RopChainGenerator(object):
     
     def init_code_template(self):
         from os import path
-        asm_blueprint_file_location = path.join(path.dirname(__file__), "asm_blueprint.asm")
+        if self.x32:
+            asm_blueprint_file_location = path.join(path.dirname(__file__), "asm_blueprint.asm")
+        else:
+            asm_blueprint_file_location = path.join(path.dirname(__file__), "asm_blueprint_x64.asm")
         self.set_code_template(asm_blueprint_file_location)
 
 
@@ -49,7 +57,7 @@ class RopChainGenerator(object):
         if replace_asm_offline == "" and replace_function_offline == "":
             self.cache_function(instruction)
         for i in range(amount):
-            inst = Instruction(is_instruction=True)
+            inst = Instruction(is_instruction=True, x32 = self.x32)
             function_name = self.clean_function_name(instruction)
             inst.set_instruction(function_name)
             if replace_function_offline != "":
@@ -62,7 +70,10 @@ class RopChainGenerator(object):
                 template_content += "\n  ; !!!! SPECIAL FUNCTION, differs from online !!! pushing instruction to the stack:"
                 template_content += "\n  xor $data_cpu_register, $data_cpu_register"
                 template_content += "\n  add $data_cpu_register, $function_name" 
-                template_content += "\n  mov [ebp + $current_offset], $data_cpu_register"
+                if self.x32:
+                    template_content += "\n  mov [ebp + $current_offset], $data_cpu_register"
+                else:
+                    template_content += "\n  mov [rbp + $current_offset], $data_cpu_register"
                 inst.instruction_or_data_template.template = template_content
 
             self.instruction_array.append(inst)
@@ -83,7 +94,7 @@ class RopChainGenerator(object):
                 except KeyError:
                     pass
             else:
-                inst = Instruction(is_instruction=False)
+                inst = Instruction(is_instruction=False, x32 = self.x32)
                 inst.set_data(data)
                 self.instruction_array.append(inst)
         return amount * pack("<L", data)
@@ -105,11 +116,9 @@ class RopChainGenerator(object):
     def clean_function_name(self, asm_string):
         """
         This will clean the illigal chars and replaces [0x12..] with "MEM_" 0x12.. "_ADDRESS" and instructions with ; to and
-        
         """
         replace_list_for_function_name = [" ", ";", ",", "[", "]", "-", "+", "*", ":"]
         asm_string = asm_string.replace("[", "MEM_").replace("]", "_ADDRESS").replace(";", "_and_")
-        # result = asm_string
         for i in replace_list_for_function_name:
             asm_string = asm_string.replace(i, "_")
         while asm_string.find('__') != -1:
@@ -124,10 +133,6 @@ class RopChainGenerator(object):
             "enter",
             "jmp ",
             "call ",
-            # "[ebx]",
-            # "mov esp, ebp",
-            # "pop ebp"
-            # "esp"
         ]):
         return self.gadget_processor_obj.gadget_finder_obj.get_good_registers(filtered_words)
 
@@ -137,12 +142,7 @@ class RopChainGenerator(object):
             "enter",
             "jmp ",
             "call ",
-            # "[ebx]",
-            # "mov esp, ebp",
-            # "pop ebp"
-            # "esp"
         ]):
-        from json import dumps
         return json.dumps(self.get_good_registers(filtered_words), indent=4)
 
 
@@ -251,7 +251,11 @@ class RopChainGenerator(object):
             )
         
         if self.offset_from_esp != 0:
-            self.CODE = self.CODE.replace("EBP_OFFSET_CALL_FUNCTION", f"\n\n  add esp, {hex(self.offset_from_esp)}\nEBP_OFFSET_CALL_FUNCTION")
+            if self.x32:
+                self.CODE = self.CODE.replace("EBP_OFFSET_CALL_FUNCTION", f"\n\n  add esp, {hex(self.offset_from_esp)}\nEBP_OFFSET_CALL_FUNCTION")
+            else:
+                self.CODE = self.CODE.replace("EBP_OFFSET_CALL_FUNCTION", f"\n\n  add rsp, {hex(self.offset_from_esp)}\nEBP_OFFSET_CALL_FUNCTION")
+
 
         for key, value in self.used_instructions.items():
             self.CODE = self.CODE.replace(
@@ -262,30 +266,29 @@ class RopChainGenerator(object):
 
 
 class Instruction(object):
-    """
-    4 different instrucitons are needed:
-
-    1. data (with specific online and offline)
-    2. instruction (with specific online and offline)
-    """
-
     def __init__(self, is_instruction, data_cpu_register = "ebx"):
         from string import Template
         self.data_cpu_register = data_cpu_register
         self.current_offset = 0
         self.used_space = 0
         self.is_instruction = is_instruction
+        if self.x32:
+            edi = "edi"
+            ebp = "ebp"
+        else:
+            edi = "rdi"
+            ebp = "rbp"
 
         template_content = ""
         if is_instruction:
             template_content += "\n  ; pushing instruction to the stack:"
-            template_content += "\n  mov $data_cpu_register, edi"
+            template_content += f"\n  mov $data_cpu_register, {edi}"
             template_content += "\n  add $data_cpu_register, $function_name" 
-            template_content += "\n  mov [ebp + $current_offset], $data_cpu_register"
+            template_content += f"\n  mov [{ebp} + $current_offset], $data_cpu_register"
         else:
             template_content += "\n  ; pushing data to the stack:"
             template_content += "\n  mov $data_cpu_register, $hex_data"
-            template_content += "\n  mov [ebp + $current_offset], $data_cpu_register"
+            template_content += f"\n  mov [{ebp} + $current_offset], $data_cpu_register"
         self.instruction_or_data_template = Template(template_content)
 
     def set_current_offset(self, offset):
@@ -309,7 +312,7 @@ class Instruction(object):
         self.function_name = instruction
         self.used_space = 4
     
-    def set_data(self, data=0x41414141,online = True):
+    def set_data(self, data=0x41414141):
         self.is_instruction = False
         # print(data)
         self.data = hex(int(data))
