@@ -266,12 +266,13 @@ class RopChainGenerator(object):
 
 
 class Instruction(object):
-    def __init__(self, is_instruction, data_cpu_register = "ebx"):
+    def __init__(self, is_instruction, data_cpu_register = "ebx", x32 = True):
         from string import Template
         self.data_cpu_register = data_cpu_register
         self.current_offset = 0
         self.used_space = 0
         self.is_instruction = is_instruction
+        self.x32 = x32
         if self.x32:
             edi = "edi"
             ebp = "ebp"
