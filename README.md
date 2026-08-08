@@ -2,7 +2,33 @@
 
 
 
-Some notes;
+## Nix flake (recommended)
+
+This repo includes a [Nix](https://nixos.org) flake. If you have Nix installed with flakes enabled, you can drop into a fully reproducible dev shell with all dependencies (Python, keystone-engine, pwntools) in one command—no venv, no pip:
+
+```bash
+nix develop
+```
+
+This puts you in a shell where `ropchain_generator` is importable immediately:
+
+```bash
+python -c "from ropchain_generator import RopChainGenerator; print('ready')"
+```
+
+To build the package as a Nix derivation:
+
+```bash
+nix build
+```
+
+To run the tests:
+
+```bash
+nix develop --command python3 tests/test_readme_examples.py
+```
+
+## How to install (pip / venv)
 * The ropchain_generator has no implementation to check for bad bytes, this is up to the user. My thought to fix this, is exporting every address as a list instead of a string, and implement something that it loops through all addresses untill there are no bad bytes. This is not implemented yet.
 * We can use this to generate generic ropchains which are compatible with other exploits, this will make codereuse possible if point one is fixed.
 * It is a POC code, not the best written.

@@ -1,4 +1,5 @@
 ropchain_generator.egg-info/
 venv/
-ropchain_generator/__pycache__/
+__pycache__/
 build/*
+/result*
