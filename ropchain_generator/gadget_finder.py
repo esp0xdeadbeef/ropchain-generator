@@ -24,7 +24,7 @@ class GadgetFinder:
             r"xmm[0-2]?[0-9]", r"xmm3[01]",     # Matches XMM registers
             r"ymm[0-2]?[0-9]", r"ymm3[01]",     # Matches YMM registers
             r"zmm[0-2]?[0-9]", r"zmm3[01]",     # Matches ZMM registers
-            r"r(3[01]|[12][0-9]|[89])[dwb]?"    # Matches R8-R31
+            r"r(3[01]|[12][0-9]|[89])[dwb]?",   # Matches R8-R31
             r"(r|e)?ip"                         # Matches instruction pointer register
         ]
 
@@ -56,6 +56,12 @@ class GadgetFinder:
             Template(r"xchg $re_register_or_number, $re_register_or_number"),
             Template(r"inc $re_register_or_number"),
             Template(r"dec $re_register_or_number"),
+            # MMX <-> GPR and XMM <-> GPR moves. `mov(\w)*` already matches
+            # movd/movq, but these are spelled out so the vector<->GPR direction is
+            # an explicit, greppable pattern rather than an accident of operand
+            # ordering. Added because this kernel has exactly one usable
+            # `movq qword [mem], mm0` store and no way to spot it via the tiers.
+            Template(r"mov[qd] $re_register_or_number, $re_register_or_number"),
             Template(r"mov(\w)* $re_register_or_number, $re_register_or_number"),
             Template(r"push $re_register_or_number;pop $re_register_or_number"),
             Template(r"xor $re_register_or_number, $re_register_or_number"),
@@ -93,7 +99,12 @@ class GadgetFinder:
         re_register_extended = re_register_extended.replace(' ', r'(\s)+')
         ends_with = r'ret(n 0x[a-fA-F\d]+)?$'
         for template in base_patterns:
-            s_tier_gadgets.append(template.substitute(re_register_or_number=re_only_register) + ";" + r"ret(n 0x[0]+)?$")
+            # S-tier = SINGLE instruction, exact register, then ret. The pattern
+            # MUST be wrapped in a group: re_only_register is a top-level
+            # alternation ("(r|e)?ax|a[l|h]|...") and substituting it bare makes
+            # the surrounding '|' split the WHOLE regex, so S-tier matched
+            # fragments instead of gadgets and came back empty on every DB.
+            s_tier_gadgets.append(template.substitute(re_register_or_number="(" + re_only_register + ")") + ";" + r"ret(n 0x[0]+)?$")
             a_tier_gadgets.append(template.substitute(re_register_or_number=re_register_or_number) + ";" + r"ret(n 0x[0]+)?$")
             b_tier_gadgets.append(template.substitute(re_register_or_number=re_register_or_number) + ";" + ends_with)
             c_tier_gadgets.append(template.substitute(re_register_or_number=re_register_extended) + ".*" + ends_with)

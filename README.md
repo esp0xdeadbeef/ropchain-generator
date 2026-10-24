@@ -28,6 +28,67 @@ To run the tests:
 nix develop --command python3 tests/test_readme_examples.py
 ```
 
+## Gadget tiers, and how to search them
+
+`GadgetFinder.get_good_registers()` classifies every gadget in a gadget DB into
+seven tiers. The tier says how "clean" a gadget is, which is exactly what you
+want when picking a chain during an exam: try S and A first, drop to C and lower
+only when S/A have nothing usable.
+
+| tier | meaning |
+|---|---|
+| **S** | a SINGLE instruction on a real register, then `ret`. The cleanest possible. |
+| **A** | one or two operands, registers only, ends in `;ret`. |
+| **B** | as A but allows `retn`. |
+| **C** | allows one extra instruction before the `ret`. |
+| **D** | like C but the `ret` may be missing (ends anywhere). |
+| **E** | extended: allows a memory operand on either side. |
+| **F** | anything containing the pattern, anywhere. |
+
+A gadget shows up in every tier it qualifies for, so `pop rax;ret` appears in
+S through F while `pop rax;pop rcx;ret` starts at C -- the second instruction
+disqualifies it from S/A/B.
+
+### Searching tiers with `gron`
+
+`get_good_registers()` returns a nested dict keyed by
+`"<tier>-tier <regex>"`, whose values are lists of gadget strings. That is
+awkward to grep, so flatten it with [gron](https://github.com/tomnomnom/gron)
+(`nix run nixpkgs#gron`):
+
+```bash
+# 1. dump the tiers as JSON
+nix develop --command python3 -c '
+import json, sys
+from ropchain_generator import RopChainGenerator
+from ropchain_generator.gadget_finder import GadgetFinder
+g = RopChainGenerator("gadgets.txt", x32=True)
+print(json.dumps(GadgetFinder(g.gadgets).get_good_registers()))' > tiers.json
+
+# 2. gron inverts the structure: the GADGET becomes the path, the tier its key
+gron tiers.json | grep '= "pop rsp;ret"'
+#   json["S-tier ..."][5] = "pop rsp;ret";
+#   json["A-tier ..."][20] = "pop rsp;ret";
+#   ...one line per tier it qualifies for
+
+# 3. or the other way round: everything in a tier
+gron tiers.json | grep '"S-tier' | grep -c '= "'
+```
+
+Note the inversion: with `gron`, the *gadget string is the path* and the tier is
+part of that path, so `grep '"S-tier'` answers "what is in S" while
+`grep '= "my gadget"'` answers "which tiers does this gadget reach". Most
+workflows do it the other way round, which is why it is documented here.
+
+### x64 caveat
+
+`RopChainGenerator.set_instruction()` and the packed output are **32-bit only**:
+`ropchain_generator.py` uses `pack("<L", ...)`, so any 64-bit address raises
+`struct.error`. On an x64 target use `GadgetProcessor` / `GadgetFinder` for
+lookup and tiering, and emit the chain yourself with 8-byte packing. The
+generator's `instruction_array` / `used_instructions` are still populated before
+the failing pack, and `asm_blueprint_x64.asm` exists for the assembly side.
+
 ## How to install (pip / venv)
 * The ropchain_generator has no implementation to check for bad bytes, this is up to the user. My thought to fix this, is exporting every address as a list instead of a string, and implement something that it loops through all addresses untill there are no bad bytes. This is not implemented yet.
 * We can use this to generate generic ropchains which are compatible with other exploits, this will make codereuse possible if point one is fixed.
@@ -37,7 +98,7 @@ nix develop --command python3 tests/test_readme_examples.py
 
 Todo:
 
-- [ ] make better documentation
+- [x] make better documentation (tiers, gron workflow, x64 caveat)
 - [ ] making tests.
 - [ ] make ropchain_generator export rpp_<binname><extension>_processed.txt with multiple addresses so bad bytes are filtered at runtime
 
